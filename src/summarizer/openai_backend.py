@@ -1,4 +1,4 @@
-"""Google Gemini API summarizer backend."""
+"""OpenAI / ChatGPT API summarizer backend (recommended provider)."""
 from __future__ import annotations
 
 import os
@@ -12,24 +12,24 @@ from ..preprocess import clean_transcript
 from ..prompts import load_prompt, render_prompt
 
 
-class GeminiSummarizer(SummarizerBackend):
-    """Summarizer using Google Gemini API."""
+class OpenAISummarizer(SummarizerBackend):
+    """Summarizer using the OpenAI (ChatGPT) API."""
 
-    def __init__(self, model: str = "gemini-1.5-flash", api_key: Optional[str] = None):
+    def __init__(self, model: str = "gpt-5.5", api_key: Optional[str] = None):
         load_dotenv()
         self.model = model
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "GEMINI_API_KEY is not set.\n"
+                "OPENAI_API_KEY is not set.\n"
                 "  1. Copy template:  cp .env.template .env\n"
-                "  2. Edit .env and set GEMINI_API_KEY=<your_key>\n"
-                "  Get a key at: https://aistudio.google.com/app/apikey"
+                "  2. Edit .env and set OPENAI_API_KEY=<your_key>\n"
+                "  Get a key at: https://platform.openai.com/api-keys"
             )
 
     @property
     def name(self) -> str:
-        return f"gemini/{self.model}"
+        return f"openai/{self.model}"
 
     def summarize(
         self,
@@ -38,7 +38,7 @@ class GeminiSummarizer(SummarizerBackend):
         system_prompt: str | None = None,
         max_tokens: int | None = None,
     ) -> str:
-        from google import genai
+        from openai import OpenAI
 
         from ..preprocess import truncate_transcript, count_tokens
         cleaned = clean_transcript(transcript)
@@ -48,15 +48,19 @@ class GeminiSummarizer(SummarizerBackend):
         system_prompt = system_prompt or load_prompt(language)
         prompt = render_prompt(system_prompt, cleaned)
 
-        client = genai.Client(api_key=self.api_key)
+        client = OpenAI(api_key=self.api_key)
+        kwargs: dict = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if max_tokens:
+            # Newer models use max_completion_tokens; older ones max_tokens.
+            kwargs["max_completion_tokens"] = max_tokens
 
         for attempt in range(3):
             try:
-                response = client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                )
-                return response.text
+                response = client.chat.completions.create(**kwargs)
+                return response.choices[0].message.content or ""
             except Exception as e:
                 print(f"[Summarizer] Attempt {attempt + 1} failed: {e}")
                 if attempt < 2:
@@ -65,6 +69,6 @@ class GeminiSummarizer(SummarizerBackend):
                     time.sleep(wait)
                 else:
                     raise RuntimeError(
-                        f"Gemini summarization failed after 3 attempts: {e}"
+                        f"OpenAI summarization failed after 3 attempts: {e}"
                     ) from e
         return ""

@@ -1,0 +1,26 @@
+# Skill: magic-lecture
+# マジックのレクチャー動画/録音 → 情報を圧縮しない詳細な日本語レクチャーノート(Markdown + PDF)。
+name: magic-lecture
+description: "マジックのレクチャー動画/録音を詳細な日本語レクチャーノートに変換し、PDF化する"
+
+prompt:
+  dir: prompts
+  language: fixed         # 音声が英語でも常に日本語ノートを生成
+  fixed_language: ja
+  default_language: ja
+
+defaults:
+  backend: api
+  api:
+    provider: openai      # ChatGPT 推奨（最高品質）
+    model: gpt-5.5
+  local:
+    runtime: mlx-vlm
+    model_path: mlx-community/gemma-4-e4b-it-4bit
+  max_tokens: 8192        # 無圧縮の長文ノートに対応（既定 2048 では途中で切れる）
+
+outputs: [md, pdf]        # Markdown と PDF を生成
+
+output:
+  subdir: ""              # 空 = スキル名（output/magic-lecture/）
+  stem_suffix: ""         # <name>.md / <name>.pdf

@@ -1,6 +1,6 @@
 # ============================================================
-# Meeting Minutes Automation - Default Configuration
-# CLI options always override values defined here.
+# Recording → Artifact Platform - Default Configuration
+# Precedence (low → high): code defaults < this file < skill.yaml < CLI options.
 # ============================================================
 
 # profile: fast | standard | quality
@@ -11,6 +11,15 @@ profile: standard
 #   auto = Whisper detects the language from the audio.
 #   Specify "ja" or "en" to force a language and skip detection.
 language: auto
+
+# ────────────────────────────────────────────────────────────
+# Skill (recipe) — what to produce. See skills/ and skills/README.md.
+# ────────────────────────────────────────────────────────────
+skill:
+  # name: meeting-minutes | magic-lecture | <your own skill>
+  name: meeting-minutes
+  # outputs: formats to produce, e.g. [md] or [md, pdf]. Default comes from the skill.
+  # outputs: [md, pdf]
 
 # ────────────────────────────────────────────────────────────
 # ASR (Speech-to-Text) settings
@@ -52,18 +61,26 @@ minutes:
   #   local – use a local LLM (see minutes.local below)
   backend: none
 
-  api:
-    # provider: gemini
-    provider: gemini
-    # Gemini model name
-    # Available (2026-04): gemini-2.5-flash / gemini-2.5-flash-lite / gemini-2.0-flash
-    model: gemini-2.5-flash
+  # Max output tokens for generation. Skills can raise this (e.g. magic-lecture
+  # uses 8192 for long, uncompressed notes).
+  max_tokens: 2048
 
-  # output_language: ja | en | auto
-  #   ja   – always output minutes in Japanese (default)
-  #   en   – always output in English
-  #   auto – follow the detected audio language
-  output_language: ja
+  api:
+    # provider: openai | gemini
+    #   openai  – ChatGPT. Recommended (highest quality). Needs OPENAI_API_KEY.
+    #   gemini  – Google Gemini. Alternative. Needs GEMINI_API_KEY.
+    provider: openai
+    # model name for the chosen provider.
+    #   openai: e.g. gpt-5.5
+    #   gemini: e.g. gemini-2.5-flash / gemini-2.5-flash-lite
+    model: gpt-5.5
+
+  # output_language: auto | ja | en
+  #   Selects which prompt (prompts/<lang>.md) is used for the minutes.
+  #   auto – follow the lecture (audio) language (default)
+  #   ja   – force the Japanese prompt
+  #   en   – force the English prompt
+  output_language: auto
 
   local:
     # runtime: mlx-vlm | mlx-lm | ollama

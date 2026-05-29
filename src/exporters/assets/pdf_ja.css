@@ -1,0 +1,87 @@
+/* PDF stylesheet with Japanese-capable fonts. */
+
+@page {
+    size: A4;
+    margin: 20mm 18mm;
+    @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-size: 9pt;
+        color: #888;
+    }
+}
+
+body {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+        "Noto Sans CJK JP", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: #1a1a1a;
+}
+
+h1, h2, h3, h4 {
+    font-weight: 700;
+    line-height: 1.4;
+    margin: 1.2em 0 0.5em;
+}
+
+h1 {
+    font-size: 20pt;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.2em;
+}
+
+h2 {
+    font-size: 15pt;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 0.15em;
+}
+
+h3 { font-size: 12.5pt; }
+h4 { font-size: 11pt; }
+
+p { margin: 0.4em 0; }
+
+ul, ol { margin: 0.4em 0 0.4em 1.2em; }
+li { margin: 0.2em 0; }
+
+strong { font-weight: 700; }
+
+code {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 0.92em;
+    background: #f3f3f3;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+}
+
+pre {
+    background: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 5px;
+    padding: 0.8em;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+pre code { background: none; padding: 0; }
+
+blockquote {
+    margin: 0.6em 0;
+    padding: 0.2em 1em;
+    border-left: 4px solid #ddd;
+    color: #555;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.6em 0;
+}
+
+th, td {
+    border: 1px solid #ccc;
+    padding: 0.4em 0.6em;
+    text-align: left;
+}
+
+th { background: #f0f0f0; }

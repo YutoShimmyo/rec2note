@@ -1,10 +1,12 @@
-"""Meeting Minutes Automation — main entry point.
+"""Recording → desired artifact — main entry point.
+
+A *skill* selects what to produce (meeting minutes, a magic lecture note, …)
+and in which formats (md, pdf). See skills/README.md.
 
 Usage:
     uv run main.py input/meeting.mp4
-    uv run main.py input/meeting.mp4 --language en --profile quality
     uv run main.py input/meeting.mp4 --minutes-backend api
-    uv run main.py input/meeting.mp4 --minutes-backend local --minutes-local-runtime ollama
+    uv run main.py input/talk.mp4 --skill magic-lecture --output md,pdf
     uv run main.py input/meeting.mp4 --config my_config.yaml
 """
 from __future__ import annotations
@@ -15,31 +17,31 @@ import sys
 import time
 from pathlib import Path
 
-from src.config import load_config, apply_cli_overrides
+from src.config import load_config, apply_cli_overrides, apply_skill_defaults
 from src.asr import create_backend
 from src.summarizer import create_summarizer
+from src.skills import load_skill, list_skills, resolve_prompt_language
+from src.prompts import load_prompt
+from src.exporters import create_exporter
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="minutes",
-        description="Transcribe audio/video meetings and generate structured minutes.",
+        description="Transcribe audio/video recordings and turn them into the artifact a skill defines.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   # Transcription only (fastest)
   uv run main.py input/meeting.mp4
 
-  # English high-quality transcription + Gemini minutes
-  uv run main.py input/meeting.mp4 --language en --profile quality --minutes-backend api
+  # Meeting minutes via API (default skill)
+  uv run main.py input/meeting.mp4 --minutes-backend api
 
-  # Japanese high-quality + local mlx-lm minutes
-  uv run main.py input/meeting.mp4 --language ja --profile quality --minutes-backend local
+  # Magic lecture note + PDF
+  uv run main.py input/talk.mp4 --skill magic-lecture --output md,pdf
 
-  # Use Ollama for minutes
-  uv run main.py input/meeting.mp4 --minutes-backend local --minutes-local-runtime ollama
-
-  # Force a specific model
+  # Force a specific ASR model
   uv run main.py input/meeting.mp4 --asr-model large-v3
 
   # Use a custom config file
@@ -49,6 +51,8 @@ Examples:
 
     parser.add_argument(
         "audio_file",
+        nargs="?",
+        default=None,
         help="Path to the audio/video file (m4a, mp3, mp4, wav, …)",
     )
 
@@ -56,6 +60,17 @@ Examples:
         "--config",
         metavar="PATH",
         help="Path to config.yaml (default: config.yaml in project root)",
+    )
+
+    parser.add_argument(
+        "--skill",
+        metavar="NAME",
+        help="Skill (recipe) to run, e.g. 'meeting-minutes' or 'magic-lecture' (default: meeting-minutes)",
+    )
+    parser.add_argument(
+        "--list-skills",
+        action="store_true",
+        help="List available skills and exit",
     )
 
     # General
@@ -93,19 +108,24 @@ Examples:
         help="Override ASR model (e.g. 'large-v3', 'medium', 'small')",
     )
 
-    # Minutes
-    mins = parser.add_argument_group("Minutes options")
+    # Generation / output
+    mins = parser.add_argument_group("Generation & output options")
     mins.add_argument(
         "--minutes-backend",
         choices=["none", "api", "local"],
-        help="Minutes generation backend (default: none — transcription only)",
+        help="Generation backend (default from skill; 'none' = transcription only)",
+    )
+    mins.add_argument(
+        "--output",
+        metavar="FORMATS",
+        help="Comma-separated output formats, e.g. 'md,pdf' (default from skill)",
     )
     mins.add_argument(
         "--minutes-language",
         choices=["ja", "en", "auto"],
         help=(
-            "Output language for the minutes (default: ja). "
-            "'auto' follows the detected audio language."
+            "Override the prompt/output language. "
+            "'auto' follows the skill (audio language or the skill's fixed language)."
         ),
     )
     mins.add_argument(
@@ -117,9 +137,20 @@ Examples:
         ),
     )
     mins.add_argument(
+        "--minutes-provider",
+        choices=["openai", "gemini"],
+        help="API provider when --minutes-backend=api (default from skill/config; openai recommended)",
+    )
+    mins.add_argument(
         "--minutes-model",
         metavar="MODEL",
-        help="Model path/name for minutes generation (HuggingFace ID or local path)",
+        help="Model path/name for generation (HuggingFace ID, local path, or API model)",
+    )
+    mins.add_argument(
+        "--minutes-max-tokens",
+        type=int,
+        metavar="N",
+        help="Max output tokens for generation (default from skill)",
     )
 
     # Legacy flags kept for backward compatibility
@@ -127,12 +158,12 @@ Examples:
     legacy.add_argument(
         "--summarize",
         action="store_true",
-        help="[Legacy] Enable local mlx-lm summarization (same as --minutes-backend local)",
+        help="[Legacy] Enable local summarization (same as --minutes-backend local)",
     )
     legacy.add_argument(
         "--use-gemini",
         action="store_true",
-        help="[Legacy] Enable Gemini API summarization (same as --minutes-backend api)",
+        help="[Legacy] Enable API summarization (same as --minutes-backend api)",
     )
 
     return parser
@@ -142,8 +173,27 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    # ── Load config ──────────────────────────────────────────────────────────
+    if getattr(args, "list_skills", False):
+        print("Available skills:")
+        for s in list_skills():
+            print(f"  - {s}")
+        return
+
+    if not args.audio_file:
+        parser.error("audio_file is required (or use --list-skills)")
+
+    # ── Load config + resolve skill ───────────────────────────────────────────
     cfg = load_config(args.config)
+
+    # Skill selection: CLI > config.yaml. Its defaults layer under CLI overrides.
+    skill_name = getattr(args, "skill", None) or cfg.skill.name
+    try:
+        skill = load_skill(skill_name)
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    cfg = apply_skill_defaults(cfg, skill.defaults, skill.outputs)
     cfg = apply_cli_overrides(cfg, args)
 
     # Handle legacy flags
@@ -160,18 +210,19 @@ def main() -> None:
 
     base_name = Path(audio_path).stem
     transcript_dir = Path("output/transcripts")
-    minutes_dir = Path("output/minutes")
     transcript_dir.mkdir(parents=True, exist_ok=True)
-    minutes_dir.mkdir(parents=True, exist_ok=True)
-
     transcript_file = transcript_dir / f"{base_name}.txt"
-    minutes_file = minutes_dir / f"{base_name}_minutes.md"
+
+    out_dir = Path("output") / skill.subdir
+    out_stem = f"{base_name}{skill.output_stem_suffix}"
 
     total_start = time.perf_counter()
+    print(f"[Skill] {skill.name} — {skill.description}")
 
     # ── Step 1: Transcription ─────────────────────────────────────────────────
     _section("Step 1: Transcription")
 
+    detected_lang: str | None = None
     if transcript_file.exists():
         print(f"Transcript already exists at {transcript_file} — skipping.")
         transcript = transcript_file.read_text(encoding="utf-8")
@@ -190,17 +241,19 @@ def main() -> None:
             language=cfg.language if cfg.language != "auto" else None,
         )
         transcript = result.text
+        detected_lang = result.language
         transcript_file.write_text(transcript, encoding="utf-8")
         print(f"\n[ASR] Transcript saved: {transcript_file}")
 
-    # ── Step 2: Minutes Generation ────────────────────────────────────────────
-    _section("Step 2: Minutes Generation")
+    # ── Step 2: Generation ────────────────────────────────────────────────────
+    _section(f"Step 2: Generation ({skill.name})")
 
+    written: list[Path] = []
     if cfg.minutes.backend == "none":
         print(
-            "Skipped. Use one of the following to enable:\n"
-            "  --minutes-backend api    (requires GEMINI_API_KEY in .env)\n"
-            "  --minutes-backend local  (requires mlx-lm or Ollama)"
+            "Skipped (backend = none). Enable generation with:\n"
+            "  --minutes-backend api    (requires an API key in .env)\n"
+            "  --minutes-backend local  (requires mlx or Ollama)"
         )
     else:
         summarizer = create_summarizer(
@@ -213,21 +266,42 @@ def main() -> None:
             ollama_url=cfg.minutes.local.ollama_url,
         )
         if summarizer:
-            print(f"[Summarizer] Backend: {summarizer.name}")
-            # Resolve output language: "auto" follows the detected audio language
-            minutes_lang = cfg.minutes.output_language
-            if minutes_lang == "auto":
-                minutes_lang = cfg.language  # may still be "auto" if no detection ran
-            minutes = summarizer.summarize(transcript, language=minutes_lang)
-            minutes_file.write_text(minutes, encoding="utf-8")
-            print(f"[Summarizer] Minutes saved: {minutes_file}")
+            print(f"[Generate] Backend: {summarizer.name}")
+
+            # Prompt language: skill decides; --minutes-language can force it.
+            prompt_lang = resolve_prompt_language(skill, cfg.language, detected_lang)
+            out_lang = cfg.minutes.output_language
+            if out_lang in ("ja", "en"):
+                prompt_lang = out_lang
+            print(f"[Generate] Prompt language: {prompt_lang}")
+
+            system_prompt = load_prompt(
+                prompt_lang,
+                prompt_dir=skill.prompt_dir,
+                default_language=skill.default_language,
+            )
+            content = summarizer.summarize(
+                transcript,
+                language=prompt_lang,
+                system_prompt=system_prompt,
+                max_tokens=cfg.minutes.max_tokens,
+            )
+
+            # ── Step 3: Export ────────────────────────────────────────────────
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for fmt in cfg.skill.outputs:
+                exporter = create_exporter(fmt)
+                path = out_dir / f"{out_stem}.{exporter.extension}"
+                res = exporter.export(content, out_path=path, title=base_name)
+                written.append(res.path)
+                print(f"[Export] {fmt}: {res.path}")
 
     # ── Summary ───────────────────────────────────────────────────────────────
     total_elapsed = time.perf_counter() - total_start
     _section(f"Done!  Total time: {total_elapsed:.1f}s")
     print(f"  Transcript : {transcript_file}")
-    if cfg.minutes.backend != "none" and minutes_file.exists():
-        print(f"  Minutes    : {minutes_file}")
+    for p in written:
+        print(f"  Output     : {p}")
 
 
 def _section(title: str) -> None:

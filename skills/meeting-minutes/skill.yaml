@@ -1,0 +1,20 @@
+# Skill: meeting-minutes
+# 音声/動画 → 構造化された議事録(Markdown)。既存の挙動を維持する既定スキル。
+name: meeting-minutes
+description: "音声/動画から構造化された議事録(Markdown)を生成する"
+
+prompt:
+  dir: prompts            # この skill.yaml からの相対。{lang}.md を探す
+  language: audio         # audio = 音声(レクチャー)の言語に追従 / fixed = 固定
+  default_language: ja    # 対応する {lang}.md が無いときのフォールバック
+
+defaults:
+  # backend と api/local の既定は config.yaml に委ねる（後方互換）。
+  # ここでは未指定にすることで、従来どおり config.yaml の値が使われる。
+  max_tokens: 2048
+
+outputs: [md]             # 生成する出力フォーマット
+
+output:
+  subdir: minutes         # output/minutes/ に保存（従来パスを維持）
+  stem_suffix: _minutes   # <name>_minutes.md（従来命名を維持）

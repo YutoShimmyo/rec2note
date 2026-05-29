@@ -31,12 +31,16 @@ def create_summarizer(
         return None
 
     if backend == "api":
+        if api_provider in ("openai", "chatgpt"):
+            from .openai_backend import OpenAISummarizer
+
+            return OpenAISummarizer(model=api_model)
         if api_provider == "gemini":
             from .gemini import GeminiSummarizer
 
             return GeminiSummarizer(model=api_model)
         raise ValueError(
-            f"Unknown API provider: '{api_provider}'. Supported: gemini"
+            f"Unknown API provider: '{api_provider}'. Supported: openai, gemini"
         )
 
     if backend == "local":

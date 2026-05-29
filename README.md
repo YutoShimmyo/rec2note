@@ -1,7 +1,19 @@
-# Meeting Minutes Automation
+# Recording → Artifact Platform
 
-音声・動画ファイルから **文字起こし** と **議事録** を自動生成するツールです。  
-日本語・英語どちらも対応しています。
+自分で録音した音声・動画を、用途ごとの **スキル** で **所望の形式（Markdown / PDF）** に変換するツールです。
+会議の議事録、マジックのレクチャーノートなど、**コードを書かずにスキルを足して**いける拡張可能なプラットフォームです。
+日本語・英語どちらにも対応します。
+
+```bash
+# 文字起こしのみ（最速）
+uv run main.py input/meeting.mp4
+
+# 会議 → 議事録（既定スキル）
+uv run main.py input/meeting.mp4 --minutes-backend api
+
+# マジック動画 → 詳細な日本語レクチャーノート + PDF
+uv run main.py input/talk.mp4 --skill magic-lecture --output md,pdf
+```
 
 ---
 
@@ -10,94 +22,99 @@
 | 機能 | 説明 |
 |------|------|
 | 🎙️ 音声認識 (STT) | Whisper / Parakeet による高精度文字起こし（日・英・自動検出） |
-| 📝 議事録生成（API） | Gemini 2.5 Flash / Flash-Lite で高速・高品質な日本語議事録を生成 |
-| 📝 議事録生成（ローカル） | Gemma 4 E4B (mlx-vlm) / Qwen2.5-7B / Ollama で完全オフライン動作 |
-| ⚡ プリセット選択 | 高品質・標準・高速のプリセットをコマンド一つで切り替え |
-| 🔧 設定ファイル | `config.yaml` で全設定を一元管理、CLI オプションで上書き可能 |
-| 🌐 日本語出力デフォルト | 英語音声でも議事録は常に日本語で出力（`--minutes-language en` で変更可） |
+| 🧩 スキル（用途） | `skills/<名前>/` を置くだけで新しい用途を追加。プロンプトもここで一元管理 |
+| 📝 生成（API / ローカル） | ChatGPT / Gemini（API）または mlx・Ollama（ローカル）で生成 |
+| 📄 出力フォーマット | Markdown と PDF（WeasyPrint、日本語フォント対応）をプラガブルに出力 |
+| 🌐 言語別プロンプト | 音声言語（日/英）に応じてプロンプトを自動切替（スキルで固定も可） |
+| 🖥️ リモート実行 | 重い処理・多数バッチを Slurm クラスタへデプロイして実行 |
+
+> **生成バックエンドのおすすめ:** **ChatGPT（OpenAI, 例: `gpt-5.5`）が最も高品質で推奨**です。
+> 次点で Gemini、完全オフラインなら mlx（Apple Silicon）/ Ollama を使います。
 
 ---
 
-## 最短実行手順
-
-### 1. 前提インストール
+## セットアップ
 
 ```bash
-# uv がなければインストール
+# uv（パッケージ管理）
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# ffmpeg（音声変換に必要）
-brew install ffmpeg       # macOS
-# sudo apt install ffmpeg  # Ubuntu/Debian
-```
+# ffmpeg（音声変換）
+brew install ffmpeg            # macOS
+# sudo apt install ffmpeg      # Ubuntu/Debian
 
-### 2. 依存パッケージのインストール
+# PDF 出力を使う場合のシステムライブラリ（WeasyPrint 用）
+brew install pango cairo gdk-pixbuf libffi   # macOS
 
-```bash
-git clone <このリポジトリのURL>
-cd Automation_minutes
+# 依存パッケージ
 uv sync
 ```
 
-### 3. 音声ファイルを変換するだけ
+> PDF は加点機能です。上記システムライブラリが無くても Markdown 出力は動作し、PDF だけが
+> 親切なエラーで無効化されます（`--output md` でも回避可）。macOS(Apple Silicon) では Homebrew の
+> ライブラリパスを自動で解決します。
+
+### API キー
 
 ```bash
-# 文字起こしのみ（最速）
-uv run main.py input/your_meeting.mp4
+cp .env.template .env
+# .env を編集して使うキーを設定:
+#   OPENAI_API_KEY=...   ← ChatGPT（推奨）  https://platform.openai.com/api-keys
+#   GEMINI_API_KEY=...   ← Gemini（代替）   https://aistudio.google.com/app/apikey
 ```
-
-出力: `output/transcripts/your_meeting.txt`
 
 ---
 
-## CLIの使い方
+## スキル（用途）
+
+スキルは「録音を何に変換するか」のレシピです。一覧表示:
+
+```bash
+uv run main.py --list-skills
+```
+
+同梱スキル:
+
+| スキル | 用途 | 既定の出力 |
+|--------|------|-----------|
+| `meeting-minutes` | 構造化された議事録（既定） | `output/minutes/<name>_minutes.md` |
+| `magic-lecture` | マジック動画の詳細な日本語レクチャーノート（常に日本語） | `output/magic-lecture/<name>.md` + `.pdf` |
+
+新しいスキルは `skills/<名前>/`（`skill.yaml` + `prompts/<lang>.md`）を作るだけで追加できます。
+詳細は [skills/README.md](skills/README.md) を参照してください。プロンプトはすべてここで一元管理されます。
+
+---
+
+## CLI の使い方
 
 ```bash
 uv run main.py <音声ファイル> [オプション]
 ```
 
-### 基本例
-
-```bash
-# 文字起こしのみ
-uv run main.py input/meeting.mp4
-
-# 英語音声 + Gemini 議事録（日本語で出力、デフォルト）
-uv run main.py input/meeting.mp4 --language en --minutes-backend api
-
-# 高品質モデル指定
-uv run main.py input/meeting.mp4 --language en --profile quality --minutes-backend api --minutes-model gemini-2.5-flash
-
-# 軽量・高速モデル
-uv run main.py input/meeting.mp4 --minutes-backend api --minutes-model gemini-2.5-flash-lite
-
-# ローカル議事録（Gemma 4 E4B、デフォルト）
-uv run main.py input/meeting.mp4 --minutes-backend local
-
-# Ollama で議事録生成
-uv run main.py input/meeting.mp4 --minutes-backend local --minutes-local-runtime ollama
-
-# 特定モデルを指定
-uv run main.py input/meeting.mp4 --asr-model large-v3
-
-# カスタム設定ファイルを使う
-uv run main.py input/meeting.mp4 --config my_config.yaml
-```
-
-### CLIオプション一覧
-
-| オプション | 選択肢 | 説明 |
-|-----------|--------|------|
-| `--language` | `ja` / `en` / `auto` | 音声言語（デフォルト: auto） |
-| `--profile` | `fast` / `standard` / `quality` | 品質プロファイル（デフォルト: standard） |
+| オプション | 選択肢 / 例 | 説明 |
+|-----------|-------------|------|
+| `--skill` | `meeting-minutes` / `magic-lecture` / … | 用途（レシピ）。既定: meeting-minutes |
+| `--list-skills` | — | 利用可能なスキルを一覧表示 |
+| `--output` | `md` / `md,pdf` | 出力フォーマット（既定はスキル依存） |
+| `--language` | `ja` / `en` / `auto` | 音声言語（既定: auto） |
+| `--profile` | `fast` / `standard` / `quality` | 品質プロファイル（既定: standard） |
 | `--asr-preset` | `A` / `B` / `C` / `D` | ASR プリセット（下記参照） |
 | `--asr-backend` | `faster_whisper` / `parakeet` | ASR バックエンドを強制指定 |
-| `--asr-model` | モデル名 | ASR モデルを強制指定（例: `large-v3`） |
-| `--minutes-backend` | `none` / `api` / `local` | 議事録生成バックエンド（デフォルト: none） |
-| `--minutes-language` | `ja` / `en` / `auto` | 議事録の出力言語（デフォルト: ja） |
+| `--asr-model` | `large-v3` など | ASR モデルを強制指定 |
+| `--minutes-backend` | `none` / `api` / `local` | 生成バックエンド（既定はスキル依存。none=文字起こしのみ） |
+| `--minutes-model` | モデル名 | 生成モデル（API モデル名 / HuggingFace ID / ローカルパス） |
 | `--minutes-local-runtime` | `mlx-vlm` / `mlx-lm` / `ollama` | ローカル LLM ランタイム |
-| `--minutes-model` | モデルパス/名前 | 議事録生成モデルを指定 |
-| `--config` | ファイルパス | config.yaml のパスを指定 |
+| `--minutes-language` | `ja` / `en` / `auto` | プロンプト/出力言語の上書き（auto=スキルに従う） |
+| `--minutes-max-tokens` | 整数 | 生成トークン上限の上書き（既定はスキル依存） |
+| `--config` | パス | config.yaml のパス |
+
+### 優先順位
+
+設定は次の順で上書きされます（右ほど強い）:
+
+```text
+コード既定  <  config.yaml  <  skill.yaml の defaults  <  CLI オプション
+```
 
 ---
 
@@ -110,8 +127,6 @@ uv run main.py input/meeting.mp4 --config my_config.yaml
 | **C** | 多言語 | 高品質 | Whisper large-v3 | 日本語にも最適 |
 | **D** | 多言語 | 標準 | Whisper large-v3-turbo | デフォルト（推奨） |
 
-### プロファイルとプリセットの自動対応
-
 | `--profile` | `--language` | 選択されるプリセット |
 |------------|-------------|------------------|
 | quality | en | A |
@@ -122,62 +137,17 @@ uv run main.py input/meeting.mp4 --config my_config.yaml
 
 ---
 
-## ⏱️ 処理時間の目安（1時間のミーティング）
+## config.yaml
 
-> **前提環境: Apple M3 / メモリ 16 GB**  
-> 一般的な会話速度（日本語: 約300文字/分、英語: 約120語/分）から試算した目安です。  
-> 音声品質・話者数・無音区間の多さなどにより実際の値は変動します。
-
-### STT（文字起こし）処理時間の目安
-
-| プリセット | モデル | 英語 1時間 | 日本語 1時間 |
-|-----------|--------|----------|------------|
-| **B / D**（推奨デフォルト）| Whisper large-v3-turbo | 約 **12〜18 分** | 約 **18〜30 分** |
-| **C**（高品質多言語）| Whisper large-v3 | 約 **18〜25 分** | 約 **25〜40 分** |
-| **A**（英語最高品質）| Parakeet TDT → Whisper large-v3 | 約 **5〜10 分** | 英語専用 |
-
-> 短いクリップほどモデル初期化コストの比率が高くなりRTFが悪化します。  
-> 実際の1時間音声では RTF 0.3〜0.5x 程度（= リアルタイムの3〜5倍速）が現実的な目安です。  
-> Parakeet はリアルタイムに近い速度（英語専用）。
-
-### 議事録生成処理時間の目安
-
-| バックエンド | モデル | 日本語 1時間分 | 英語 1時間分 |
-|------------|--------|-------------|------------|
-| **api** | gemini-2.5-flash-lite | 約 **10〜30 秒** | 約 **10〜30 秒** |
-| **api** | gemini-2.5-flash | 約 **30〜60 秒** | 約 **30〜60 秒** |
-| **local** (mlx-vlm) | Gemma 4 E4B（4bit）| 約 **2〜3 分** | 約 **1〜2 分** |
-| **local** (mlx-lm) | Qwen2.5-7B（4bit）| 約 **2〜4 分** | 約 **1〜2 分** |
-| **local** (ollama) | gemma2:9b | ⚠️ 20 分超で上限切れ | ⚠️ 40 分超で上限切れ |
-
-> ローカルモデルはプロンプト（文字起こし全文）の読み込み時間が支配的。  
-> Ollama はデフォルト 8K context のため長い会議は要 `num_ctx` 拡張。
-
-### トータル所要時間の早見表（日本語 1 時間ミーティング）
-
-| 組み合わせ | STT | 議事録 | **合計** | 特徴 |
-|-----------|-----|--------|---------|------|
-| プリセット D + Gemini flash-lite（日本語）| ~20〜30 分 | ~30 秒 | **~21〜31 分** | バランス型・API 必要 |
-| プリセット D + Gemini flash（日本語）| ~20〜30 分 | ~1 分 | **~21〜31 分** | 高品質・API 必要 |
-| プリセット D + Gemma 4 E4B（日本語）| ~20〜30 分 | ~3 分 | **~23〜33 分** | 完全オフライン・Apache 2.0 |
-| プリセット B + Gemini flash-lite（英語）| ~12〜18 分 | ~30 秒 | **~13〜19 分** | 英語音声の最速構成 |
-| STT のみ（議事録なし）| ~20〜30 分 | — | **~20〜30 分** | 文字起こしだけでよい場合 |
-
----
-
-## config.yaml の使い方
-
-```bash
-cp config.yaml my_config.yaml
-# my_config.yaml を編集
-uv run main.py input/meeting.mp4 --config my_config.yaml
-```
-
-主要な設定項目:
+`config.yaml` で既定値を一元管理し、`skill.yaml` と CLI で上書きします。
 
 ```yaml
 profile: standard         # fast / standard / quality
 language: auto            # auto / ja / en（音声の言語）
+
+skill:
+  name: meeting-minutes   # 既定スキル
+  # outputs: [md, pdf]    # スキル既定を上書きしたい場合
 
 asr:
   preset: auto            # auto / A / B / C / D
@@ -186,13 +156,11 @@ asr:
 
 minutes:
   backend: none           # none / api / local
-  output_language: ja     # ja / en / auto（議事録の出力言語）
-
+  output_language: auto   # auto=音声言語に追従 / ja / en
+  max_tokens: 2048        # 生成トークン上限（スキルが引き上げ可）
   api:
-    provider: gemini
-    # 利用可能: gemini-2.5-flash / gemini-2.5-flash-lite / gemini-2.0-flash
-    model: gemini-2.5-flash
-
+    provider: openai      # openai（ChatGPT, 推奨）/ gemini
+    model: gpt-5.5
   local:
     runtime: mlx-vlm      # mlx-vlm / mlx-lm / ollama
     model_path: "mlx-community/gemma-4-e4b-it-4bit"
@@ -202,54 +170,19 @@ minutes:
 
 ---
 
-## APIキーの設定方法
+## リモート実行（Slurm）
 
-Gemini API を使う場合:
-
-```bash
-# テンプレートをコピー
-cp .env.template .env
-
-# .env を編集して APIキーを設定
-# GEMINI_API_KEY=your_key_here
-```
-
-APIキーの取得: https://aistudio.google.com/app/apikey
-
----
-
-## ローカルモデルの配置方法
-
-### 議事録生成モデル（推奨: Gemma 4 E4B）
-
-Gemma 4 E4B は `mlx-vlm` を使うマルチモーダルモデルです（テキスト専用として使用可能）：
+重い ASR や多数のファイルをまとめて処理したいときは、Slurm クラスタへデプロイして実行できます。
 
 ```bash
-# gemma-4-e4b-it-4bit をダウンロード（~3GB、初回のみ）
-huggingface-cli download mlx-community/gemma-4-e4b-it-4bit \
-    --local-dir models/gemma-4-e4b-it-4bit
-
-# 実行（HuggingFace IDでも自動ダウンロード可）
-uv run main.py input/meeting.mp4 \
-    --minutes-backend local \
-    --minutes-local-runtime mlx-vlm \
-    --minutes-model mlx-community/gemma-4-e4b-it-4bit
+# input/talk.mp4 を転送し、magic-lecture スキルでジョブ投入
+python deploy.py input/talk.mp4 user@cc21dev0 --remote_dir my_job -- \
+    --skill magic-lecture --minutes-backend api --output md
 ```
 
-### テキスト専用モデル（代替）
-
-```bash
-# Qwen2.5-7B（mlx-lm 用）
-huggingface-cli download mlx-community/Qwen2.5-7B-Instruct-4bit \
-    --local-dir models/Qwen2.5-7B-Instruct-4bit
-
-uv run main.py input/meeting.mp4 \
-    --minutes-backend local \
-    --minutes-local-runtime mlx-lm \
-    --minutes-model models/Qwen2.5-7B-Instruct-4bit
-```
-
-詳細は `models/README.md` を参照してください。
+`--` 以降の引数は、クラスタ上の `main.py` にそのまま渡されます（[scripts/run_slurm.sh](scripts/run_slurm.sh)）。
+スキル・プロンプトも自動で転送されます。クラスタでは mlx は使えないため API か faster_whisper を、
+PDF はシステムライブラリが無ければ `--output md` を推奨します。
 
 ---
 
@@ -257,93 +190,50 @@ uv run main.py input/meeting.mp4 \
 
 | ファイル | 説明 |
 |---------|------|
-| `output/transcripts/<ファイル名>.txt` | 文字起こしテキスト |
-| `output/minutes/<ファイル名>_minutes.md` | 構造化議事録（Markdown） |
+| `output/transcripts/<name>.txt` | 文字起こしテキスト（全スキル共通） |
+| `output/<skill>/<name>...` | スキルが生成した成果物（md / pdf）。meeting-minutes は `output/minutes/<name>_minutes.md` |
 
----
-
-## 対応フォーマット
-
-音声/動画: `.m4a`, `.mp3`, `.mp4`, `.wav`, `.flac`, `.ogg`, `.webm` など ffmpeg が対応する形式すべて。
+対応フォーマット（入力）: `.m4a`, `.mp3`, `.mp4`, `.wav`, `.flac`, `.ogg`, `.webm` など ffmpeg が扱える形式すべて。
 
 ---
 
 ## よくあるエラー
 
-### `Error: File not found`
-→ ファイルパスを確認してください。`input/` ディレクトリに配置されているか確認。
-
-### `GEMINI_API_KEY is not set`
-→ `.env` ファイルに API キーが設定されているか確認してください。
-
-### `Cannot connect to Ollama`
-→ Ollama が起動しているか確認: `ollama serve`  
-→ モデルがプルされているか確認: `ollama pull gemma2:9b`
-
-### `nemo_toolkit not installed`（Parakeet 使用時）
-→ NeMo が必要です: `pip install nemo_toolkit['asr']`  
-→ または `--asr-backend faster_whisper` で代替バックエンドを使用してください。
-
-### `mlx-lm requires Apple Silicon`
-→ mlx-lm は Apple Silicon (M1/M2/M3/M4) 専用です。  
-→ 他の環境では `--minutes-backend api` か `--minutes-local-runtime ollama` を使用してください。
-
-### メモリ不足
-→ より小さいモデルを使用してください: `--asr-model medium` または `--asr-model small`
-
-### 議事録が途中で切れる / 警告が出る
-→ 文字起こしが長すぎてモデルのコンテキスト上限に達しています。  
-→ 各モデルで対応できるミーティング時間の目安（日本語）：
-
-| バックエンド | 対応時間（日本語） | 対応時間（英語） |
-|------------|--------------|--------------|
-| Gemma 4 E4B (mlx-vlm) | 約 7 時間 | 約 13 時間 |
-| Qwen2.5-7B (mlx-lm) | 約 7 時間 | 約 13 時間 |
-| Gemini API | 実質無制限 | 実質無制限 |
-| Ollama gemma2:9b（デフォルト） | **約 20 分 ⚠️** | 約 40 分 |
-
-→ Ollama を長い会議に使う場合は `Modelfile` で `PARAMETER num_ctx 32768` に設定（→ 日本語 約1時間40分に延長）。  
-→ 詳しくは `REPORT.md` の「コンテキスト長と対応可能なミーティング時間」を参照。
+- **`File not found`** — 入力パスを確認（`input/` 配置推奨）。
+- **`OPENAI_API_KEY is not set` / `GEMINI_API_KEY is not set`** — `.env` にキーを設定。
+- **PDF: `WeasyPrint is unavailable`** — `brew install pango cairo gdk-pixbuf libffi`、または `--output md`。
+- **`Cannot connect to Ollama`** — `ollama serve` と `ollama pull <model>`。
+- **`mlx-* requires Apple Silicon`** — 他環境では `--minutes-backend api` か `--minutes-local-runtime ollama`。
+- **生成が途中で切れる** — `--minutes-max-tokens` を増やす（長文スキルは `skill.yaml` で既定を引き上げ済み）。
 
 ---
 
-## ライセンスについて
+## ライセンス
 
-このツール自体は MIT ライセンスです。  
-**ただし、使用するモデルは各モデルのライセンスに従います。**  
-商用利用の前に必ず `docs/model_licenses.md` を確認し、各モデルの公式ライセンスをご確認ください。
+このツール自体は MIT ライセンスです。使用するモデルは各モデルのライセンスに従います。
+商用利用の前に [docs/model_licenses.md](docs/model_licenses.md) を確認してください。
 
 ---
 
 ## ディレクトリ構成
 
-```
-Automation_minutes/
-├── main.py               # メインエントリポイント
-├── config.yaml           # デフォルト設定
-├── .env.template         # 環境変数テンプレート
-├── pyproject.toml        # 依存関係（uv管理）
+```text
+.
+├── main.py                 # エントリポイント（ASR → 生成 → エクスポート）
+├── config.yaml             # 既定設定
+├── skills/                 # スキル（用途）。プロンプトもここで一元管理
+│   ├── meeting-minutes/    #   skill.yaml + prompts/{ja,en}.md
+│   ├── magic-lecture/      #   skill.yaml + prompts/ja.md（[transcript] プレースホルダ）
+│   └── README.md           #   スキル追加手順
 ├── src/
-│   ├── config.py         # 設定ファイル読み込み
-│   ├── preprocess.py     # テキスト前処理
-│   ├── asr/              # 音声認識バックエンド
-│   │   ├── base.py
-│   │   ├── faster_whisper_backend.py
-│   │   ├── parakeet_backend.py
-│   │   └── factory.py
-│   └── summarizer/       # 議事録生成バックエンド
-│       ├── base.py
-│       ├── gemini.py
-│       ├── mlx_vlm_backend.py  # Gemma 4 E4B など (mlx-vlm)
-│       ├── mlx_backend.py      # Qwen2.5 など (mlx-lm)
-│       ├── ollama_backend.py
-│       └── factory.py
-├── models/               # ローカルモデル配置場所（Git除外）
-│   └── README.md
-├── docs/
-│   └── model_licenses.md # モデルライセンス情報
-├── input/                # 入力ファイル（Git除外）
-├── output/               # 出力ファイル（Git除外）
-└── scripts/
-    └── run_slurm.sh      # Slurm クラスタ用
+│   ├── config.py           # 設定の読込・優先順位マージ
+│   ├── prompts.py          # プロンプト読込 + transcript 注入（render_prompt）
+│   ├── skills.py           # スキルローダー
+│   ├── asr/                # 音声認識バックエンド（faster_whisper / parakeet）
+│   ├── summarizer/         # 生成バックエンド（openai / gemini / mlx-vlm / mlx-lm / ollama）
+│   └── exporters/          # 出力フォーマット（markdown / pdf-weasyprint）
+├── deploy.py               # Slurm へのデプロイ
+├── scripts/run_slurm.sh    # クラスタ実行スクリプト
+├── input/                  # 入力（Git 除外）
+└── output/                 # 出力（Git 除外）
 ```

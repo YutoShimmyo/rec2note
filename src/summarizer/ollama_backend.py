@@ -7,17 +7,7 @@ import urllib.request
 
 from .base import SummarizerBackend
 from ..preprocess import clean_transcript
-
-
-_SYSTEM_PROMPT_EN = """\
-You are an expert meeting secretary.
-Create structured meeting minutes from the transcript.
-Output in Markdown with sections: Summary, Key Discussion Points, Action Items."""
-
-_SYSTEM_PROMPT_JA = """\
-あなたは優秀な会議秘書です。
-書き起こしから構造化された議事録をMarkdown形式で作成してください。
-セクション：概要、主な議論のポイント、アクションアイテム"""
+from ..prompts import load_prompt, render_prompt
 
 
 class OllamaSummarizer(SummarizerBackend):
@@ -35,22 +25,30 @@ class OllamaSummarizer(SummarizerBackend):
     def name(self) -> str:
         return f"ollama/{self.model}"
 
-    def summarize(self, transcript: str, language: str = "auto") -> str:
+    def summarize(
+        self,
+        transcript: str,
+        language: str = "auto",
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
         from ..preprocess import truncate_transcript, count_tokens
         cleaned = clean_transcript(transcript)
         cleaned = truncate_transcript(cleaned, runtime="ollama", language=language)
         token_est = count_tokens(cleaned)
         print(f"[Summarizer] Estimated input tokens: ~{token_est:,}")
-        system_prompt = _SYSTEM_PROMPT_JA if language == "ja" else _SYSTEM_PROMPT_EN
+        system_prompt = system_prompt or load_prompt(language)
+        prompt = render_prompt(system_prompt, cleaned)
 
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Transcript:\n\n{cleaned}"},
+                {"role": "user", "content": prompt},
             ],
             "stream": False,
         }
+        if max_tokens:
+            payload["options"] = {"num_predict": max_tokens}
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             f"{self.base_url}/api/chat",

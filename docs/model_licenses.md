@@ -62,7 +62,19 @@ License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 
 ## 議事録生成（LLM）モデル
 
-### Gemma 4 E4B（デフォルト推奨・mlx-vlm）
+### OpenAI ChatGPT（API・推奨）
+
+| モデル | ライセンス形態 | 配布元 |
+|--------|------------|--------|
+| gpt-5.5 など | OpenAI API / Business Terms | [OpenAI Platform](https://platform.openai.com/) |
+
+- モデル自体は配布されない（API 経由での利用のみ）。最も高品質で、本ツールの推奨プロバイダ。
+- 利用規約: https://openai.com/policies/ — 商用利用・データ取り扱いの条件を事前に確認すること。
+- モデル名（`gpt-5.5` 等）は `config.yaml` / `skill.yaml` で設定可能。
+
+---
+
+### Gemma 4 E4B（ローカル推奨・mlx-vlm）
 
 | モデル | ライセンス | 配布元 |
 |--------|-----------|--------|
@@ -124,9 +136,12 @@ License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 | mlx-lm | **MIT** | Apple Silicon 向けテキスト LLM 推論 |
 | mlx-vlm | **MIT** | Apple Silicon 向けマルチモーダル LLM 推論 |
 | google-genai | **Apache 2.0** | Gemini API クライアント |
+| openai | **Apache 2.0** | OpenAI / ChatGPT API クライアント |
 | huggingface-hub | **Apache 2.0** | モデルのダウンロード管理 |
 | python-dotenv | **BSD 3-Clause** | 環境変数（.env）読み込み |
 | pyyaml | **MIT** | YAML 設定ファイル読み込み |
+| markdown | **BSD 3-Clause** | Markdown → HTML 変換（PDF 出力用） |
+| weasyprint | **BSD 3-Clause** | HTML → PDF レンダリング（PDF 出力用） |
 
 ---
 
@@ -138,6 +153,7 @@ License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 - [ ] **Parakeet を公開成果物に使う場合**は NVIDIA への帰属表示を追加する
 - [ ] **Gemma 3/Gemma 2** を商用利用する場合は Google の利用規約を確認する
 - [ ] **Gemini API** を商用利用する場合は Google API Terms of Service を確認する
+- [ ] **OpenAI / ChatGPT API** を商用利用する場合は OpenAI の利用規約を確認する
 - [ ] **Apache 2.0 モデル（Gemma 4, Qwen2.5）** を改変・再配布する場合は著作権表示を保持する
 
 ---

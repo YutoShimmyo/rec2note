@@ -12,15 +12,30 @@ def run_command(command):
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="Deploy and run meeting minutes automation on Slurm cluster.")
+    parser = argparse.ArgumentParser(
+        description="Deploy and run the recording→artifact pipeline on a Slurm cluster.",
+        epilog=(
+            "Pass any main.py options after '--', e.g.:\n"
+            "  python deploy.py input/talk.mp4 user@host -- --skill magic-lecture --minutes-backend api"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("input_file", help="Local path to the input audio/video file.")
     parser.add_argument("remote_host", help="Remote host (e.g., user@cc21dev0).")
     parser.add_argument("--remote_dir", default="Automation_minutes_Job", help="Remote directory to deploy to.")
+    parser.add_argument(
+        "main_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments passed through to main.py on the cluster (prefix with --).",
+    )
     args = parser.parse_args()
 
     input_path = args.input_file
     remote_host = args.remote_host
     remote_dir = args.remote_dir
+    # argparse.REMAINDER keeps a leading "--"; drop it.
+    passthrough = args.main_args[1:] if args.main_args[:1] == ["--"] else args.main_args
+    passthrough_str = " ".join(passthrough)
     
     if not os.path.exists(input_path):
         print(f"Error: Input file not found: {input_path}")
@@ -32,7 +47,11 @@ def main():
     # Exclude output, input (except the target file), .git, etc.
     # We'll just tar specific files/folders.
     archive_name = "project_code.tar.gz"
-    run_command(f"tar -czf {archive_name} src/ main.py scripts/ pyproject.toml uv.lock README.md config.yaml .env.template")
+    run_command(
+        f"tar -czf {archive_name} "
+        "src/ main.py scripts/ skills/ prompts/ "
+        "pyproject.toml uv.lock README.md config.yaml .env.template"
+    )
 
     print(f"\n=== Step 2: Transferring Files to {remote_host} ===")
     # Create remote directory
@@ -49,8 +68,8 @@ def main():
     remote_script = f"""
     cd /work/$(whoami)/{remote_dir}
     tar -xzf {archive_name}
-    # Submit job
-    sbatch scripts/run_slurm.sh input/{input_filename}
+    # Submit job (extra args are passed through to main.py)
+    sbatch scripts/run_slurm.sh input/{input_filename} {passthrough_str}
     """
     
     run_command(f"ssh {remote_host} '{remote_script}'")
