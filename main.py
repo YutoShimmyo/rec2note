@@ -21,7 +21,8 @@ from src.config import load_config, apply_cli_overrides, apply_skill_defaults
 from src.asr import create_backend
 from src.summarizer import create_summarizer
 from src.skills import load_skill, list_skills, resolve_prompt_language
-from src.prompts import load_prompt
+from src.prompts import load_prompt, render_prompt
+from src.preprocess import clean_transcript
 from src.exporters import create_exporter
 
 
@@ -245,56 +246,68 @@ def main() -> None:
         transcript_file.write_text(transcript, encoding="utf-8")
         print(f"\n[ASR] Transcript saved: {transcript_file}")
 
-    # ── Step 2: Generation ────────────────────────────────────────────────────
+    # ── Step 2: Build the skill prompt, then produce the requested outputs ─────
     _section(f"Step 2: Generation ({skill.name})")
 
     written: list[Path] = []
-    if cfg.minutes.backend == "none":
-        print(
-            "Skipped (backend = none). Enable generation with:\n"
-            "  --minutes-backend api    (requires an API key in .env)\n"
-            "  --minutes-backend local  (requires mlx or Ollama)"
-        )
-    else:
-        summarizer = create_summarizer(
-            backend=cfg.minutes.backend,
-            api_provider=cfg.minutes.api.provider,
-            api_model=cfg.minutes.api.model,
-            local_runtime=cfg.minutes.local.runtime,
-            model_path=cfg.minutes.local.model_path,
-            ollama_model=cfg.minutes.local.ollama_model,
-            ollama_url=cfg.minutes.local.ollama_url,
-        )
-        if summarizer:
-            print(f"[Generate] Backend: {summarizer.name}")
+    outputs = cfg.skill.outputs
+    want_prompt = "prompt" in outputs
+    gen_formats = [o for o in outputs if o != "prompt"]
 
-            # Prompt language: skill decides; --minutes-language can force it.
-            prompt_lang = resolve_prompt_language(skill, cfg.language, detected_lang)
-            out_lang = cfg.minutes.output_language
-            if out_lang in ("ja", "en"):
-                prompt_lang = out_lang
-            print(f"[Generate] Prompt language: {prompt_lang}")
+    # Resolve the skill's prompt + language (needed for the prompt output and/or generation).
+    # Prompt language: the skill decides; --minutes-language can force it.
+    prompt_lang = resolve_prompt_language(skill, cfg.language, detected_lang)
+    out_lang = cfg.minutes.output_language
+    if out_lang in ("ja", "en"):
+        prompt_lang = out_lang
+    system_prompt = load_prompt(
+        prompt_lang,
+        prompt_dir=skill.prompt_dir,
+        default_language=skill.default_language,
+    )
 
-            system_prompt = load_prompt(
-                prompt_lang,
-                prompt_dir=skill.prompt_dir,
-                default_language=skill.default_language,
+    # (a) Copy-paste prompt — NO API call. The transcript is injected into the
+    #     skill's prompt template so it can be pasted straight into ChatGPT etc.
+    if want_prompt:
+        rendered = render_prompt(system_prompt, clean_transcript(transcript))
+        exporter = create_exporter("prompt")
+        path = out_dir / f"{out_stem}_prompt.{exporter.extension}"
+        written.append(exporter.export(rendered, out_path=path, title=base_name).path)
+        print(f"[Output] prompt ({prompt_lang}, no API): {path}")
+
+    # (b) Generated artifacts (md/pdf …) — needs a generation backend.
+    if gen_formats:
+        if cfg.minutes.backend == "none":
+            print(
+                "Generation skipped (backend = none). Enable with:\n"
+                "  --minutes-backend api    (requires an API key in .env)\n"
+                "  --minutes-backend local  (requires mlx or Ollama)\n"
+                "  (or use --output prompt to get a copy-paste prompt with no API)"
             )
-            content = summarizer.summarize(
-                transcript,
-                language=prompt_lang,
-                system_prompt=system_prompt,
-                max_tokens=cfg.minutes.max_tokens,
+        else:
+            summarizer = create_summarizer(
+                backend=cfg.minutes.backend,
+                api_provider=cfg.minutes.api.provider,
+                api_model=cfg.minutes.api.model,
+                local_runtime=cfg.minutes.local.runtime,
+                model_path=cfg.minutes.local.model_path,
+                ollama_model=cfg.minutes.local.ollama_model,
+                ollama_url=cfg.minutes.local.ollama_url,
             )
-
-            # ── Step 3: Export ────────────────────────────────────────────────
-            out_dir.mkdir(parents=True, exist_ok=True)
-            for fmt in cfg.skill.outputs:
-                exporter = create_exporter(fmt)
-                path = out_dir / f"{out_stem}.{exporter.extension}"
-                res = exporter.export(content, out_path=path, title=base_name)
-                written.append(res.path)
-                print(f"[Export] {fmt}: {res.path}")
+            if summarizer:
+                print(f"[Generate] Backend: {summarizer.name}  | language: {prompt_lang}")
+                content = summarizer.summarize(
+                    transcript,
+                    language=prompt_lang,
+                    system_prompt=system_prompt,
+                    max_tokens=cfg.minutes.max_tokens,
+                )
+                for fmt in gen_formats:
+                    exporter = create_exporter(fmt)
+                    path = out_dir / f"{out_stem}.{exporter.extension}"
+                    res = exporter.export(content, out_path=path, title=base_name)
+                    written.append(res.path)
+                    print(f"[Export] {fmt}: {res.path}")
 
     # ── Summary ───────────────────────────────────────────────────────────────
     total_elapsed = time.perf_counter() - total_start

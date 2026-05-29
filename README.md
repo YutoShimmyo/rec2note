@@ -13,6 +13,9 @@ uv run main.py input/meeting.mp4 --minutes-backend api
 
 # マジック動画 → 詳細な日本語レクチャーノート + PDF
 uv run main.py input/talk.mp4 --skill magic-lecture --output md,pdf
+
+# 文字起こし + 貼り付け用プロンプトだけ生成（API課金ゼロ）
+uv run main.py input/talk.mp4 --skill magic-lecture --output prompt
 ```
 
 ---
@@ -24,7 +27,8 @@ uv run main.py input/talk.mp4 --skill magic-lecture --output md,pdf
 | 🎙️ 音声認識 (STT) | Whisper / Parakeet による高精度文字起こし（日・英・自動検出） |
 | 🧩 スキル（用途） | `skills/<名前>/` を置くだけで新しい用途を追加。プロンプトもここで一元管理 |
 | 📝 生成（API / ローカル） | ChatGPT / Gemini（API）または mlx・Ollama（ローカル）で生成 |
-| 📄 出力フォーマット | Markdown と PDF（WeasyPrint、日本語フォント対応）をプラガブルに出力 |
+| 📄 出力フォーマット | Markdown / PDF（WeasyPrint、日本語フォント対応）/ コピペ用プロンプトをプラガブルに出力 |
+| 💸 API課金ゼロ運用 | `--output prompt` で「プロンプト＋文字起こし」を生成し、ChatGPT 等へ手貼りできる |
 | 🌐 言語別プロンプト | 音声言語（日/英）に応じてプロンプトを自動切替（スキルで固定も可） |
 | 🖥️ リモート実行 | 重い処理・多数バッチを Slurm クラスタへデプロイして実行 |
 
@@ -85,6 +89,21 @@ uv run main.py --list-skills
 
 ---
 
+## API 課金ゼロで ChatGPT に貼る（`--output prompt`）
+
+API 料金をかけたくないときは、`prompt` 出力でスキルのプロンプトに文字起こしを差し込んだ
+**「そのまま貼れる完成プロンプト」** をファイル化できます。**API は一切呼びません。**
+
+```bash
+uv run main.py input/talk.mp4 --skill magic-lecture --output prompt
+# → output/magic-lecture/<name>_prompt.txt （プロンプト全文 + 文字起こし）
+```
+
+生成された `.txt` を ChatGPT 等の Web UI に貼り付けて推論させてください。
+`--output prompt,md` のように生成系と併用も可能です。
+
+---
+
 ## CLI の使い方
 
 ```bash
@@ -95,7 +114,8 @@ uv run main.py <音声ファイル> [オプション]
 |-----------|-------------|------|
 | `--skill` | `meeting-minutes` / `magic-lecture` / … | 用途（レシピ）。既定: meeting-minutes |
 | `--list-skills` | — | 利用可能なスキルを一覧表示 |
-| `--output` | `md` / `md,pdf` | 出力フォーマット（既定はスキル依存） |
+| `--output` | `md` / `pdf` / `prompt`（カンマ区切り可） | 出力フォーマット（既定はスキル依存） |
+| `--minutes-provider` | `openai` / `gemini` | API プロバイダ（既定はスキル/config。openai 推奨） |
 | `--language` | `ja` / `en` / `auto` | 音声言語（既定: auto） |
 | `--profile` | `fast` / `standard` / `quality` | 品質プロファイル（既定: standard） |
 | `--asr-preset` | `A` / `B` / `C` / `D` | ASR プリセット（下記参照） |
@@ -191,7 +211,8 @@ PDF はシステムライブラリが無ければ `--output md` を推奨しま�
 | ファイル | 説明 |
 |---------|------|
 | `output/transcripts/<name>.txt` | 文字起こしテキスト（全スキル共通） |
-| `output/<skill>/<name>...` | スキルが生成した成果物（md / pdf）。meeting-minutes は `output/minutes/<name>_minutes.md` |
+| `output/<skill>/<name>.md` / `.pdf` | スキルが生成した成果物。meeting-minutes は `output/minutes/<name>_minutes.md` |
+| `output/<skill>/<name>_prompt.txt` | `--output prompt` で出力する貼り付け用プロンプト（API 不使用） |
 
 対応フォーマット（入力）: `.m4a`, `.mp3`, `.mp4`, `.wav`, `.flac`, `.ogg`, `.webm` など ffmpeg が扱える形式すべて。
 
@@ -231,7 +252,7 @@ PDF はシステムライブラリが無ければ `--output md` を推奨しま�
 │   ├── skills.py           # スキルローダー
 │   ├── asr/                # 音声認識バックエンド（faster_whisper / parakeet）
 │   ├── summarizer/         # 生成バックエンド（openai / gemini / mlx-vlm / mlx-lm / ollama）
-│   └── exporters/          # 出力フォーマット（markdown / pdf-weasyprint）
+│   └── exporters/          # 出力フォーマット（markdown / pdf-weasyprint / prompt）
 ├── deploy.py               # Slurm へのデプロイ
 ├── scripts/run_slurm.sh    # クラスタ実行スクリプト
 ├── input/                  # 入力（Git 除外）

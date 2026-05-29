@@ -4,12 +4,14 @@ from __future__ import annotations
 from .base import Exporter
 from .markdown import MarkdownExporter
 from .pdf_weasyprint import PDFWeasyPrintExporter
+from .prompt import PromptExporter
 
 
 EXPORTERS: dict[str, type[Exporter]] = {
     "md": MarkdownExporter,
     "markdown": MarkdownExporter,
     "pdf": PDFWeasyPrintExporter,
+    "prompt": PromptExporter,
 }
 
 

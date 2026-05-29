@@ -17,6 +17,15 @@ def test_markdown_exporter_writes_verbatim(tmp_path: Path):
     assert res.format == "md"
 
 
+def test_prompt_exporter_writes_text_verbatim(tmp_path: Path):
+    out = tmp_path / "p.txt"
+    exporter = create_exporter("prompt")
+    assert exporter.extension == "txt"
+    res = exporter.export("PROMPT + TRANSCRIPT", out_path=out, title="t")
+    assert res.format == "prompt"
+    assert out.read_text(encoding="utf-8") == "PROMPT + TRANSCRIPT"
+
+
 def test_unknown_format_raises():
     with pytest.raises(ValueError):
         create_exporter("docx")

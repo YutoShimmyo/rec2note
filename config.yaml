@@ -18,7 +18,8 @@ language: auto
 skill:
   # name: meeting-minutes | magic-lecture | <your own skill>
   name: meeting-minutes
-  # outputs: formats to produce, e.g. [md] or [md, pdf]. Default comes from the skill.
+  # outputs: formats to produce: md / pdf / prompt. Default comes from the skill.
+  #   prompt = "プロンプト+文字起こし" を .txt 出力（API 不使用、ChatGPT 等へ手貼り用）
   # outputs: [md, pdf]
 
 # ────────────────────────────────────────────────────────────

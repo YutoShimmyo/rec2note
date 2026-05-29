@@ -41,7 +41,8 @@ defaults:                           # generation defaults — override config.ya
   local: { runtime: mlx-vlm, model_path: "mlx-community/gemma-4-e4b-it-4bit" }
   max_tokens: 8192                  # raise for long, uncompressed output
 
-outputs: [md, pdf]                  # which formats to produce (md, pdf, …)
+outputs: [md, pdf]                  # formats to produce: md, pdf, prompt
+                                    #   prompt = ready-to-paste prompt+transcript file (no API call)
 
 output:
   subdir: ""                        # output/<subdir>/ ; empty = skill name
