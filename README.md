@@ -155,6 +155,8 @@ uv run main.py <音声ファイル> [オプション]
 | standard | ja | D |
 | * | auto | C (quality) / D (standard/fast) |
 
+処理時間の目安（実測RTF・1時間推定）は [docs/benchmarks.md](docs/benchmarks.md) を参照。
+
 ---
 
 ## config.yaml
