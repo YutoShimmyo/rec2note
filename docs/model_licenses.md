@@ -21,15 +21,19 @@
 
 ### Whisper（OpenAI）
 
-| モデル | プリセット | ライセンス | 配布元 |
+| モデル | プリセット | ライセンス | 配布元（HF モデルカード） |
 |--------|-----------|-----------|--------|
-| whisper-large-v3 | C（高品質） | **MIT** | [openai/whisper-large-v3](https://huggingface.co/openai/whisper-large-v3) |
+| whisper-large-v3 | C（高品質） | **Apache-2.0** | [openai/whisper-large-v3](https://huggingface.co/openai/whisper-large-v3) |
 | whisper-large-v3-turbo | B/D（標準） | **MIT** | [openai/whisper-large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo) |
-| whisper-medium | B/D（fallback）| **MIT** | [openai/whisper-medium](https://huggingface.co/openai/whisper-medium) |
-| whisper-small | B/D（fallback）| **MIT** | [openai/whisper-small](https://huggingface.co/openai/whisper-small) |
+| whisper-medium | B/D（fallback）| **Apache-2.0** | [openai/whisper-medium](https://huggingface.co/openai/whisper-medium) |
+| whisper-small | B/D（fallback）| **Apache-2.0** | [openai/whisper-small](https://huggingface.co/openai/whisper-small) |
 
-- ライセンス全文: https://github.com/openai/whisper/blob/main/LICENSE
-- **MIT のため商用利用・改変・再配布が可能**（著作権表示を保持すること）
+> **ライセンスの帰属に関する注意（重要）:**
+> - OpenAI のオリジナル Whisper（[GitHub](https://github.com/openai/whisper) のコード＆重み）は **MIT**。
+> - 一方、HuggingFace 上の `openai/*` モデルカードの license タグは **Apache-2.0**（ただし `whisper-large-v3-turbo` のみ **MIT**）。上表は HF のモデルカードに準拠した値です。
+> - 本ツールの `faster-whisper` は上記をそのまま使うのではなく、**CTranslate2 形式に変換された再配布版**（例: [`Systran/faster-whisper-large-v3`](https://huggingface.co/Systran/faster-whisper-large-v3) / [`Systran/faster-whisper-medium`](https://huggingface.co/Systran/faster-whisper-medium)、turbo は [`mobiuslabsgmbh/faster-whisper-large-v3-turbo`](https://huggingface.co/mobiuslabsgmbh/faster-whisper-large-v3-turbo) 等）を自動取得します。これらの再配布版は **MIT** です。
+
+- **MIT / Apache-2.0 のいずれも、商用利用・改変・再配布が可能**（著作権表示・ライセンス表示を保持すること）。
 
 ---
 
@@ -78,13 +82,13 @@ License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 
 | モデル | ライセンス | 配布元 |
 |--------|-----------|--------|
-| gemma-4-e4b-it（4bit量子化） | **Apache 2.0** | [mlx-community/gemma-4-e4b-it-4bit](https://huggingface.co/mlx-community/gemma-4-e4b-it-4bit) |
+| gemma-4-e4b-it（4bit量子化） | **Apache-2.0** | [mlx-community/gemma-4-e4b-it-4bit](https://huggingface.co/mlx-community/gemma-4-e4b-it-4bit) |
 
-- Gemma 4 は Google が 2026年3月に **Apache 2.0 で公開**（Gemma 1/2/3 の独自ライセンスから変更）
+- Gemma 4 は Google が 2026年に **Apache 2.0 で公開**（Gemma 1/2/3 の独自ライセンス「Gemma Terms of Use」から変更）
 - **商用利用・改変・再配布が可能**（著作権表示・ライセンス表示を保持すること）
-- モデルを再配布する場合は `NOTICE` ファイルの保持が必要
-- 元モデル: https://huggingface.co/google/gemma-4-e4b-it
-- ライセンス全文: https://ai.google.dev/gemma/docs/gemma_4_license
+- モデルを再配布する場合、`NOTICE` ファイルが含まれていればその保持が必要（Apache 2.0 第4条）
+- 元モデル: https://huggingface.co/google/gemma-4-E4B-it
+- ライセンス全文: https://www.apache.org/licenses/LICENSE-2.0
 
 ---
 
@@ -154,7 +158,7 @@ License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 - [ ] **Gemma 3/Gemma 2** を商用利用する場合は Google の利用規約を確認する
 - [ ] **Gemini API** を商用利用する場合は Google API Terms of Service を確認する
 - [ ] **OpenAI / ChatGPT API** を商用利用する場合は OpenAI の利用規約を確認する
-- [ ] **Apache 2.0 モデル（Gemma 4, Qwen2.5）** を改変・再配布する場合は著作権表示を保持する
+- [ ] **Apache 2.0 モデル（Gemma 4, Qwen2.5, Whisper large-v3/medium/small）** を改変・再配布する場合は著作権・ライセンス表示を保持する
 
 ---
 
