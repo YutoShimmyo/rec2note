@@ -1,5 +1,5 @@
 [project]
-name = "automation-minutes"
+name = "rec2note"
 version = "0.2.0"
 description = "Turn recordings into desired artifacts (minutes, lecture notes, …) via pluggable skills, backends, and exporters"
 readme = "README.md"

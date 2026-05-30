@@ -22,7 +22,7 @@ def main():
     )
     parser.add_argument("input_file", help="Local path to the input audio/video file.")
     parser.add_argument("remote_host", help="Remote host (e.g., user@cc21dev0).")
-    parser.add_argument("--remote_dir", default="Automation_minutes_Job", help="Remote directory to deploy to.")
+    parser.add_argument("--remote_dir", default="rec2note_Job", help="Remote directory to deploy to.")
     parser.add_argument(
         "main_args",
         nargs=argparse.REMAINDER,
