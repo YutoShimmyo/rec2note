@@ -5,6 +5,7 @@ and in which formats (md, pdf). See skills/README.md.
 
 Usage:
     uv run main.py input/meeting.mp4
+    uv run main.py input/meeting1.mp4 input/meeting2.mp4
     uv run main.py input/meeting.mp4 --minutes-backend api
     uv run main.py input/talk.mp4 --skill magic-lecture --output md,pdf
     uv run main.py input/meeting.mp4 --config my_config.yaml
@@ -19,6 +20,7 @@ from pathlib import Path
 
 from src.config import load_config, apply_cli_overrides, apply_skill_defaults
 from src.asr import create_backend
+from src.audio_input import prepare_audio_input
 from src.summarizer import create_summarizer
 from src.skills import load_skill, list_skills, resolve_prompt_language
 from src.prompts import load_prompt, render_prompt
@@ -36,6 +38,9 @@ Examples:
   # Transcription only (fastest)
   uv run main.py input/meeting.mp4
 
+  # Process multiple recordings
+  uv run main.py input/meeting1.mp4 input/meeting2.mp4
+
   # Meeting minutes via API (default skill)
   uv run main.py input/meeting.mp4 --minutes-backend api
 
@@ -51,10 +56,10 @@ Examples:
     )
 
     parser.add_argument(
-        "audio_file",
-        nargs="?",
-        default=None,
-        help="Path to the audio/video file (m4a, mp3, mp4, wav, …)",
+        "audio_files",
+        nargs="*",
+        metavar="AUDIO_FILE",
+        help="Paths to one or more audio/video files (m4a, mp3, mp4, wav, …)",
     )
 
     parser.add_argument(
@@ -100,7 +105,7 @@ Examples:
     )
     asr.add_argument(
         "--asr-backend",
-        choices=["faster_whisper", "parakeet"],
+        choices=["mlx_whisper", "faster_whisper", "parakeet"],
         help="Override ASR backend regardless of preset",
     )
     asr.add_argument(
@@ -180,8 +185,8 @@ def main() -> None:
             print(f"  - {s}")
         return
 
-    if not args.audio_file:
-        parser.error("audio_file is required (or use --list-skills)")
+    if not args.audio_files:
+        parser.error("at least one AUDIO_FILE is required (or use --list-skills)")
 
     # ── Load config + resolve skill ───────────────────────────────────────────
     cfg = load_config(args.config)
@@ -203,12 +208,31 @@ def main() -> None:
     if getattr(args, "summarize", False) and cfg.minutes.backend == "none":
         cfg.minutes.backend = "local"
 
-    # ── Validate input file ───────────────────────────────────────────────────
-    audio_path = args.audio_file
-    if not os.path.exists(audio_path):
-        print(f"Error: File not found: {audio_path}", file=sys.stderr)
+    # Validate every input before starting work, so a typo cannot leave a batch
+    # only partially processed.
+    missing_files = [path for path in args.audio_files if not os.path.exists(path)]
+    if missing_files:
+        for path in missing_files:
+            print(f"Error: File not found: {path}", file=sys.stderr)
         sys.exit(1)
 
+    invalid_files = [path for path in args.audio_files if not Path(path).is_file()]
+    if invalid_files:
+        for path in invalid_files:
+            print(
+                f"Error: 入力は音声・動画ファイルを指定してください。フォルダ等は指定できません: {path}",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+
+    for index, audio_path in enumerate(args.audio_files, start=1):
+        if len(args.audio_files) > 1:
+            _section(f"File {index}/{len(args.audio_files)}: {audio_path}")
+        process_audio(audio_path, cfg, skill)
+
+
+def process_audio(audio_path: str, cfg, skill) -> None:
+    """Transcribe one recording and create the artifacts selected by *skill*."""
     base_name = Path(audio_path).stem
     transcript_dir = Path("output/transcripts")
     transcript_dir.mkdir(parents=True, exist_ok=True)
@@ -237,10 +261,11 @@ def main() -> None:
             language=cfg.language,
         )
         print(f"[ASR] Backend: {asr.name}")
-        result = asr.transcribe(
-            audio_path,
-            language=cfg.language if cfg.language != "auto" else None,
-        )
+        with prepare_audio_input(audio_path) as asr_path:
+            result = asr.transcribe(
+                asr_path,
+                language=cfg.language if cfg.language != "auto" else None,
+            )
         transcript = result.text
         detected_lang = result.language
         transcript_file.write_text(transcript, encoding="utf-8")

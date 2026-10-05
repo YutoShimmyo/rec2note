@@ -41,7 +41,8 @@ asr:
   #   profile=*        + language=auto → C (quality) / D (standard/fast)
   preset: auto
 
-  # backend: (empty = use preset)  faster_whisper | parakeet
+  # backend: (empty = use preset)  mlx_whisper | faster_whisper | parakeet
+  #   On Apple Silicon, empty automatically uses mlx_whisper (Metal GPU).
   #   Override to force a specific backend, ignoring preset.
   backend: ""
 
@@ -49,7 +50,8 @@ asr:
   #   Override to force a specific model, e.g. "large-v3", "medium", "small".
   model: ""
 
-  # device: (empty = auto-detect)  cpu | cuda | mps
+  # device: faster_whisper only: (empty = auto-detect)  cpu | cuda
+  #   mlx_whisper always uses Apple Silicon's Metal GPU; do not set "mps".
   device: ""
 
 # ────────────────────────────────────────────────────────────

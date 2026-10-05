@@ -8,6 +8,9 @@
 # 文字起こしのみ（最速）
 uv run main.py input/meeting.mp4
 
+# 複数ファイルをまとめて文字起こし
+uv run main.py input/meeting1.mp4 input/meeting2.mp4 --minutes-backend none
+
 # 会議 → 議事録（既定スキル）
 uv run main.py input/meeting.mp4 --minutes-backend api
 
@@ -18,13 +21,16 @@ uv run main.py input/talk.mp4 --skill magic-lecture --output md,pdf
 uv run main.py input/talk.mp4 --skill magic-lecture --output prompt
 ```
 
+Apple Silicon Macでは、上の通常コマンドが既定で **MLX Whisper / Metal GPU** を使います。
+初回だけ `whisper-large-v3-turbo` モデル（約1.5 GB）をダウンロードします。Intel Mac・Linux・Windowsでは自動で従来のCPU/CUDA対応 `faster-whisper` に切り替わります。
+
 ---
 
 ## できること
 
 | 機能 | 説明 |
 |------|------|
-| 🎙️ 音声認識 (STT) | Whisper / Parakeet による高精度文字起こし（日・英・自動検出） |
+| 🎙️ 音声認識 (STT) | Apple SiliconではMetal GPUを使うMLX Whisper、他環境ではfaster-whisper / Parakeetによる高精度文字起こし（日・英・自動検出） |
 | 🧩 スキル（用途） | `skills/<名前>/` を置くだけで新しい用途を追加。プロンプトもここで一元管理 |
 | 📝 生成（API / ローカル） | ChatGPT / Gemini（API）または mlx・Ollama（ローカル）で生成 |
 | 📄 出力フォーマット | Markdown / PDF（WeasyPrint、日本語フォント対応）/ コピペ用プロンプトをプラガブルに出力 |
@@ -119,7 +125,7 @@ uv run main.py <音声ファイル> [オプション]
 | `--language` | `ja` / `en` / `auto` | 音声言語（既定: auto） |
 | `--profile` | `fast` / `standard` / `quality` | 品質プロファイル（既定: standard） |
 | `--asr-preset` | `A` / `B` / `C` / `D` | ASR プリセット（下記参照） |
-| `--asr-backend` | `faster_whisper` / `parakeet` | ASR バックエンドを強制指定 |
+| `--asr-backend` | `mlx_whisper` / `faster_whisper` / `parakeet` | ASR バックエンドを強制指定 |
 | `--asr-model` | `large-v3` など | ASR モデルを強制指定 |
 | `--minutes-backend` | `none` / `api` / `local` | 生成バックエンド（既定はスキル依存。none=文字起こしのみ） |
 | `--minutes-model` | モデル名 | 生成モデル（API モデル名 / HuggingFace ID / ローカルパス） |
@@ -142,10 +148,10 @@ uv run main.py <音声ファイル> [オプション]
 
 | プリセット | 言語 | 品質 | モデル | 備考 |
 |-----------|------|------|--------|------|
-| **A** | 英語 | 高品質 | Parakeet TDT → Whisper large-v3 | Parakeet は英語専用 |
-| **B** | 英語 | 標準 | Whisper large-v3-turbo | 速度と品質のバランス |
-| **C** | 多言語 | 高品質 | Whisper large-v3 | 日本語にも最適 |
-| **D** | 多言語 | 標準 | Whisper large-v3-turbo | デフォルト（推奨） |
+| **A** | 英語 | 高品質 | Apple Silicon: MLX Whisper large-v3 / 他環境: Parakeet TDT → Whisper large-v3 | Parakeet は英語専用 |
+| **B** | 英語 | 標準 | Apple Silicon: MLX Whisper large-v3-turbo / 他環境: faster-whisper | 速度と品質のバランス |
+| **C** | 多言語 | 高品質 | Apple Silicon: MLX Whisper large-v3 / 他環境: faster-whisper | 日本語にも最適 |
+| **D** | 多言語 | 標準 | Apple Silicon: MLX Whisper large-v3-turbo / 他環境: faster-whisper | デフォルト（推奨） |
 
 | `--profile` | `--language` | 選択されるプリセット |
 |------------|-------------|------------------|
@@ -173,7 +179,7 @@ skill:
 
 asr:
   preset: auto            # auto / A / B / C / D
-  backend: ""             # 空=自動 / faster_whisper / parakeet
+  backend: ""             # 空=自動（Apple SiliconではMLX/Metal GPU）
   model: ""               # 空=自動 / large-v3 / medium / small など
 
 minutes:
@@ -216,7 +222,7 @@ PDF はシステムライブラリが無ければ `--output md` を推奨しま�
 | `output/<skill>/<name>.md` / `.pdf` | スキルが生成した成果物。meeting-minutes は `output/minutes/<name>_minutes.md` |
 | `output/<skill>/<name>_prompt.txt` | `--output prompt` で出力する貼り付け用プロンプト（API 不使用） |
 
-対応フォーマット（入力）: `.m4a`, `.mp3`, `.mp4`, `.wav`, `.flac`, `.ogg`, `.webm` など ffmpeg が扱える形式すべて。
+対応フォーマット（入力）: `.m4a`, `.mp3`, `.mp4`, `.vob`, `.VOB`, `.wav`, `.flac`, `.ogg`, `.webm` など。VOB は ffmpeg で先頭の音声トラックを一時 WAV（16 kHz・モノラル）に変換してから ASR に渡します。一時ファイルは処理終了時に削除します。VOB 入力には ffmpeg のインストールが必要です。別の音声トラックを使う場合は、事前に ffmpeg で抽出してください。
 
 ---
 

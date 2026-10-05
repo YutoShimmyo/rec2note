@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .base import ASRBackend
 from .faster_whisper_backend import FasterWhisperBackend
+from .mlx_whisper_backend import MLXWhisperBackend
 from .parakeet_backend import ParakeetBackend
 
 
@@ -13,15 +14,17 @@ from .parakeet_backend import ParakeetBackend
 # ---------------------------------------------------------------------------
 PRESETS: dict[str, dict] = {
     "A": {
-        "description": "English · High Quality  (Parakeet TDT → Whisper large-v3)",
+        "description": "English · High Quality  (MLX Whisper large-v3 → Parakeet TDT → Whisper large-v3)",
         "candidates": [
+            ("mlx_whisper", "mlx-community/whisper-large-v3"),
             ("parakeet", "nvidia/parakeet-tdt-0.6b-v2"),
             ("faster_whisper", "large-v3"),
         ],
     },
     "B": {
-        "description": "English · Standard  (Whisper large-v3-turbo)",
+        "description": "English · Standard  (MLX Whisper large-v3-turbo → Whisper large-v3-turbo)",
         "candidates": [
+            ("mlx_whisper", "mlx-community/whisper-large-v3-turbo"),
             ("faster_whisper", "large-v3-turbo"),
         ],
         "fallback_candidates": [
@@ -30,14 +33,16 @@ PRESETS: dict[str, dict] = {
         ],
     },
     "C": {
-        "description": "Multilingual · High Quality  (Whisper large-v3)",
+        "description": "Multilingual · High Quality  (MLX Whisper large-v3 → Whisper large-v3)",
         "candidates": [
+            ("mlx_whisper", "mlx-community/whisper-large-v3"),
             ("faster_whisper", "large-v3"),
         ],
     },
     "D": {
-        "description": "Multilingual · Standard  (Whisper large-v3-turbo)",
+        "description": "Multilingual · Standard  (MLX Whisper large-v3-turbo → Whisper large-v3-turbo)",
         "candidates": [
+            ("mlx_whisper", "mlx-community/whisper-large-v3-turbo"),
             ("faster_whisper", "large-v3-turbo"),
         ],
         "fallback_candidates": [
@@ -121,6 +126,8 @@ def _instantiate(backend: str, model: str, device: str) -> ASRBackend:
         return FasterWhisperBackend(
             model_size=model or "large-v3-turbo", device=device
         )
+    if backend == "mlx_whisper":
+        return MLXWhisperBackend(model_size=model or "mlx-community/whisper-large-v3-turbo")
     if backend == "parakeet":
         try:
             import nemo.collections.asr  # noqa: F401 – availability check
@@ -129,5 +136,5 @@ def _instantiate(backend: str, model: str, device: str) -> ASRBackend:
         return ParakeetBackend(model_name=model)
     raise ValueError(
         f"Unknown ASR backend: '{backend}'. "
-        "Supported: faster_whisper, parakeet"
+        "Supported: mlx_whisper, faster_whisper, parakeet"
     )
